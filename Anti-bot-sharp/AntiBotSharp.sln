@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30128.74
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AntiBotSharp", "Anti-bot-sharp\AntiBotSharp.csproj", "{324B58FC-EDEE-4858-890A-15B83D9BC296}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{324B58FC-EDEE-4858-890A-15B83D9BC296}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{324B58FC-EDEE-4858-890A-15B83D9BC296}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{324B58FC-EDEE-4858-890A-15B83D9BC296}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{324B58FC-EDEE-4858-890A-15B83D9BC296}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AFB86D8F-2F46-4B9A-B5E9-CF7EE01C88BE}
+	EndGlobalSection
+EndGlobal
