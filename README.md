@@ -1,0 +1,12 @@
+# Anti-bot
+A Discord bot made with the beautiful C# using [`Discord.Net`](https://github.com/discord-net/Discord.Net), made to be the Anti bot bot.
+
+# Setup
+
+To get setup:
+
+* Clone the Repo
+* Get the Config file from Kieran
+* Open in Visual Studio
+* Restore NuGet packages
+* Run
