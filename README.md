@@ -10,3 +10,7 @@ To get setup:
 * Open in Visual Studio
 * Restore NuGet packages
 * Run
+
+# Invite link:
+
+https://discord.com/oauth2/authorize?client_id=755758502164693062&permissions=1409805430&scope=bot
