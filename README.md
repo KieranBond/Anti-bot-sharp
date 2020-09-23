@@ -1,5 +1,5 @@
 # Anti-bot
-A Discord bot made with the beautiful C# using [`Discord.Net`](https://github.com/discord-net/Discord.Net), made to be the Anti bot bot.
+A Discord bot made with the beautiful language called C# using [`Discord.Net`](https://github.com/discord-net/Discord.Net), made to be the Anti bot bot.
 
 # Setup
 
