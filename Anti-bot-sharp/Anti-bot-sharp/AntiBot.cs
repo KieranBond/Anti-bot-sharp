@@ -1,15 +1,29 @@
-﻿using Discord;
+﻿using AntiBotSharp.Helpers;
+using AntiBotSharp.VO;
+using Discord;
 using Discord.WebSocket;
 using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace AntiBotSharp
 {
     public class AntiBot
     {
+        private const string _botPrefix = "?ybd";
+
         private DiscordSocketClient _client;
 
         private string _clientToken;
+
+        private HashSet<string> _adminUserIDs = new HashSet<string>()
+        {
+            "158280982774939648"
+        };
+
+        private HashSet<SocketUser> _blacklistedUsers = new HashSet<SocketUser>();
+        private HashSet<string> _filteredWords = new HashSet<string>();
 
         public AntiBot(string clientToken)
         {
@@ -22,14 +36,194 @@ namespace AntiBotSharp
             _client.MessageReceived += OnMessageReceived;
         }
 
-        private Task OnMessageReceived(SocketMessage message)
+        private async Task OnMessageReceived(SocketMessage message)
         {
-            if(message.Author.IsBot)
-            {
+            Command command = CommandParser.ParseMessage(_botPrefix, message);
 
+            if (command != null)
+            {
+                //Only admins
+                if(_adminUserIDs.Contains(message.Author.Id.ToString()))
+                    await HandleCommand(command);
+            }
+            else if(IsMessageAuthorBlacklisted(message.Author))
+            {
+                await HandleBlacklistedAuthor(message);
+            }
+            else if(IsMessageFiltered(message.Content))
+            {
+                await HandleFilteredMessage(message);
+            }
+        }
+
+        private async Task HandleBlacklistedAuthor(SocketMessage message)
+        {
+            await message.DeleteAsync();
+            await message.Author.SendMessageAsync("You've been blacklisted.");
+        }
+
+        private async Task HandleFilteredMessage(SocketMessage message)
+        {
+            int numberOfBadWords = GetFilteredWordsFromMessage(message.Content).Count;
+
+            await message.DeleteAsync();
+
+            if(numberOfBadWords > 1)
+                await message.Channel.SendMessageAsync("Stop using bad words.");
+        }
+
+        private async Task HandleCommand(Command command)
+        {
+            switch(command.CommandType)
+            {
+                case CommandType.AddAdmin:
+
+                    foreach(CommandArgument argument in command.Arguments)
+                    {
+                        if(argument.IsUserMention)
+                        {
+                            string idToAdd = argument.MentionedUser.Id.ToString();
+                            await Log("Adding admin: " + idToAdd);
+                            _adminUserIDs.Add(idToAdd);
+                        }
+                    }
+
+                    break;
+
+                case CommandType.RemoveAdmin:
+
+                    foreach (CommandArgument argument in command.Arguments)
+                    {
+                        if (argument.IsUserMention)
+                        {
+                            string idToAdd = argument.MentionedUser.Id.ToString();
+                            await Log("Removing admin: " + idToAdd);
+                            _adminUserIDs.Remove(idToAdd);
+                        }
+                    }
+
+                    break;
+
+                case CommandType.AddBlacklist:
+
+                    foreach(CommandArgument argument in command.Arguments)
+                    {
+                        if (argument.IsUserMention)
+                        {
+                            _blacklistedUsers.Add(argument.MentionedUser);
+                        }
+                    }
+
+                    break;
+
+                case CommandType.RemoveBlacklist:
+
+                    foreach (CommandArgument argument in command.Arguments)
+                    {
+                        if (argument.IsUserMention)
+                        {
+                            _blacklistedUsers.Remove(argument.MentionedUser);
+                        }
+                    }
+
+                    break;
+
+                case CommandType.AddFilter:
+
+                    _filteredWords.Add(command.Arguments[0].Argument);
+
+                    break;
+
+                case CommandType.RemoveFilter:
+
+                    _filteredWords.Remove(command.Arguments[0].Argument);
+
+                    break;
+
+                case CommandType.GetID:
+
+                    await Log("Author ID: " + command.Author.Id);
+
+                    await Log("ID's in order of @:");
+
+                    if (command.Arguments == null || command.Arguments.Count == 0)
+                        return;
+
+                    foreach(CommandArgument arg in command.Arguments)
+                    {
+                        if(arg.MentionedUser != null)
+                            await Log("ID: " + arg.MentionedUser.Id);
+                    }
+
+                    break;
+
+                case CommandType.Cleanup:
+
+                    var channel = command.OriginalMessage.Channel;
+                    var messages = await channel.GetMessagesAsync().FlattenAsync();
+                    foreach(IMessage messageInChannel in messages)
+                    {
+                        if(messageInChannel.Content.StartsWith(_botPrefix))
+                        {
+                            await messageInChannel.DeleteAsync();
+                        }
+                    }
+
+                    await Log("Finished cleanup");
+                    await channel.SendMessageAsync("Cleanup complete.");
+
+                    break;
+
+                case CommandType.Help:
+
+                    LogHelp(command.OriginalMessage.Channel);
+
+                    break;
+
+                case CommandType.None:
+
+                    return;
+
+                    break;
+            }
+        }
+
+        private bool IsMessageAuthorBlacklisted(SocketUser author)
+        {
+            return _blacklistedUsers.Contains(author);
+        }
+
+        private bool IsMessageFiltered(string message)
+        {
+            string[] messageWords = message.ToLower().Split(" ");
+
+            bool wordInMessageIsFiltered = false;
+
+            foreach(string word in messageWords)
+            {
+                if (_filteredWords.Contains(word))
+                    wordInMessageIsFiltered = true;
             }
 
-            return Task.CompletedTask;
+            return wordInMessageIsFiltered;
+        }
+
+        private List<string> GetFilteredWordsFromMessage(string message)
+        {
+            string[] words = message.ToLower().Split(" ");
+
+            List<string> filteredWords = new List<string>();
+
+            foreach (string word in words)
+            {
+                foreach (string filteredWord in _filteredWords)
+                {
+                    if (filteredWord.Contains(word))
+                        filteredWords.Add(word);
+                }
+            }
+
+            return filteredWords;
         }
 
         private Task OnConnected()
@@ -48,5 +242,32 @@ namespace AntiBotSharp
             Console.WriteLine(message);
             return Task.CompletedTask;
         }
+
+        private async void LogHelp(ISocketMessageChannel destinationChannel)
+        {
+            string helpString = new StringBuilder()
+                    .Append("YourBigDaddy is always here to help.\n")
+                    .Append("\n")
+                    .Append("Prefix: `?ybd`.\n")
+                    .Append("All commands are case insensitive, and require Admin power.\n")
+                    .Append("\n")
+                    .Append("`addadmin @` : Everybody mentioned gets made an Admin.\n")
+                    .Append("`removeadmin @` : Opposite of add.\n")
+                    .Append("\n")
+                    .Append("`addblacklist @` basically global mute on whoever is mentioned.\n")
+                    .Append("`removeblacklist @` removes any mentioned from the global mute\n")
+                    .Append("\n")
+                    .Append("`addfilter filteredwordhere` word entered as argument is in filter list. If somebody uses it, it gets deleted.\n")
+                    .Append("`removefilter filteredwordhere` opposite of add. Removes from list.\n")
+                    .Append("\n")
+                    .Append("`cleanup` simply removes the last 100 messages using the prefix. Can take a while so be sparing with this. It will output when done.\n")
+                    .Append("\n")
+                    .Append("[DEBUG]\n")
+                    .Append("`getid @` logs to console bot is running on the ID of message Author and anybody mentioned.").ToString();
+            
+            await Log(helpString);
+            await destinationChannel.SendMessageAsync(helpString);
+        }
+
     }
 }
