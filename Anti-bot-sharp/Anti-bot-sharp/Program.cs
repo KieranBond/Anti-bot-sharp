@@ -16,7 +16,7 @@ namespace AntiBotSharp
             Config cfg = await Config.BuildConfig();
             string clientToken = cfg.Token;
 
-            AntiBot bot = new AntiBot(clientToken);
+            AntiBot bot = new AntiBot(cfg);
             await bot.Startup();
 
 

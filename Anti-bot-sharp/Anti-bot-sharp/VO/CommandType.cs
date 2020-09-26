@@ -12,6 +12,7 @@
         RemoveFilter,
         ListBlacklist,
         ListFilter,
+        ListAdmins,
         GetID,
         Cleanup
     }

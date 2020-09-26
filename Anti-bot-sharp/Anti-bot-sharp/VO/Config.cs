@@ -8,6 +8,7 @@ namespace AntiBotSharp.VO
     public class Config
     {
         public string Token { get; set; }
+        public string[] Admins { get; set; }
 
         public static async Task<Config> BuildConfig()
         {

@@ -114,6 +114,12 @@ namespace AntiBotSharp.Helpers
 
                     break;
 
+                case "listadmins":
+
+                    return CommandType.ListAdmins;
+
+                    break;
+
                 case "cleanup":
 
                     return CommandType.Cleanup;

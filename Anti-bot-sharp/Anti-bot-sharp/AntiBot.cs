@@ -15,25 +15,54 @@ namespace AntiBotSharp
 
         private DiscordSocketClient _client;
 
+        private Config _config;
         private string _clientToken;
 
-        private HashSet<string> _adminUserIDs = new HashSet<string>()
-        {
-            "158280982774939648"
-        };
+        private HashSet<SocketUser> _admins = new HashSet<SocketUser>();
 
         private HashSet<SocketUser> _blacklistedUsers = new HashSet<SocketUser>();
         private HashSet<string> _filteredWords = new HashSet<string>();
 
-        public AntiBot(string clientToken)
+        public AntiBot(Config config)
         {
-            _clientToken = clientToken;
+            Configure(config);
 
             _client = new DiscordSocketClient();
             _client.Log += (msg) => Log(msg.ToString());
 
             _client.Connected += OnConnected;
+            _client.Ready += OnReady;
             _client.MessageReceived += OnMessageReceived;
+        }
+
+        private Task OnReady()
+        {
+            ConfigureAdmins();
+            return Task.CompletedTask;
+        }
+
+        private void Configure(Config config)
+        {
+            _config = config;
+            _clientToken = config.Token;
+        }
+
+        private async void ConfigureAdmins()
+        {
+            foreach(SocketGuild guild in _client.Guilds)
+            {
+                await Log("Looking for admins in guild: " + guild.Name);
+                foreach(string admin in _config.Admins)
+                {
+                    var adminUser = guild.GetUser(ulong.Parse(admin));
+
+                    if(adminUser != null)
+                    {
+                        await Log("Admin found: " + adminUser.Username);
+                        _admins.Add(adminUser);
+                    }
+                }
+            }
         }
 
         private async Task OnMessageReceived(SocketMessage message)
@@ -43,7 +72,7 @@ namespace AntiBotSharp
             if (command != null)
             {
                 //Only admins
-                if(_adminUserIDs.Contains(message.Author.Id.ToString()))
+                if(_admins.Contains(message.Author))
                     await HandleCommand(command);
             }
             else if(IsMessageAuthorBlacklisted(message.Author))
@@ -82,9 +111,9 @@ namespace AntiBotSharp
                     {
                         if(argument.IsUserMention)
                         {
-                            string idToAdd = argument.MentionedUser.Id.ToString();
-                            await Log("Adding admin: " + idToAdd);
-                            _adminUserIDs.Add(idToAdd);
+                            SocketUser userToAdd = argument.MentionedUser;
+                            await Log("Adding admin: " + userToAdd.Username);
+                            _admins.Add(userToAdd);
                         }
                     }
 
@@ -96,9 +125,9 @@ namespace AntiBotSharp
                     {
                         if (argument.IsUserMention)
                         {
-                            string idToAdd = argument.MentionedUser.Id.ToString();
-                            await Log("Removing admin: " + idToAdd);
-                            _adminUserIDs.Remove(idToAdd);
+                            SocketUser userToRemove = argument.MentionedUser;
+                            await Log("Removing admin: " + userToRemove.Username);
+                            _admins.Remove(userToRemove);
                         }
                     }
 
@@ -137,6 +166,51 @@ namespace AntiBotSharp
                 case CommandType.RemoveFilter:
 
                     _filteredWords.Remove(command.Arguments[0].Argument);
+
+                    break;
+
+                case CommandType.ListAdmins:
+
+                    StringBuilder adminOutput = new StringBuilder("Admins:\n");
+                    await Log("Admins:");
+                    foreach (SocketUser admin in _admins)
+                    {
+                        await Log(admin.Username);
+                        adminOutput.Append(admin.Username).Append("\n");
+                    }
+
+                    await command.OriginalMessage.Channel.SendMessageAsync(adminOutput.ToString());
+
+                    break;
+
+                case CommandType.ListBlacklist:
+
+                    StringBuilder blacklistedUsersOutput = new StringBuilder("Blacklist:\n");
+
+                    await Log("Blacklist:");
+                    foreach (SocketUser blacklistedUser in _blacklistedUsers)
+                    {
+                        string output = string.Format("Name: {0}, ID: {1}", blacklistedUser.Username, blacklistedUser.Id);
+                        await Log(output);
+                        blacklistedUsersOutput.Append(output).Append("\n");
+                    }
+
+                    await command.OriginalMessage.Channel.SendMessageAsync(blacklistedUsersOutput.ToString());
+
+                    break;
+
+                case CommandType.ListFilter:
+
+                    StringBuilder filteredWordsOutput = new StringBuilder("Filtered Words:\n");
+
+                    await Log("Filtered words:");
+                    foreach (string filteredWord in _filteredWords)
+                    {
+                        filteredWordsOutput.Append(filteredWord).Append("\n");
+                        await Log(filteredWord);
+                    }
+
+                    await command.OriginalMessage.Channel.SendMessageAsync(filteredWordsOutput.ToString());
 
                     break;
 
