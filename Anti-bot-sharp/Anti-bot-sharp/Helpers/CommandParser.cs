@@ -102,6 +102,18 @@ namespace AntiBotSharp.Helpers
 
                     break;
 
+                case "addtimeout":
+
+                    return CommandType.AddTimeout;
+
+                    break;
+
+                case "removetimeout":
+
+                    return CommandType.RemoveTimeout;
+
+                    break;
+
                 case "listblacklist":
 
                     return CommandType.ListBlacklist;

@@ -22,6 +22,7 @@ namespace AntiBotSharp
 
         private HashSet<SocketUser> _blacklistedUsers = new HashSet<SocketUser>();
         private HashSet<string> _filteredWords = new HashSet<string>();
+        private Dictionary<SocketUser, string> _timedOutUsers = new Dictionary<SocketUser, string>();
 
         public AntiBot(Config config)
         {
@@ -83,6 +84,23 @@ namespace AntiBotSharp
             {
                 await HandleFilteredMessage(message);
             }
+            else if(IsMessageAuthorOnTimeout(message.Author))
+            {
+                await HandleTimeoutUser(message);
+            }
+        }
+
+        private bool IsMessageAuthorOnTimeout(SocketUser author)
+        {
+            return _timedOutUsers.ContainsKey(author);
+        }
+
+        private async Task HandleTimeoutUser(SocketMessage message)
+        {
+            await message.DeleteAsync();
+
+            int timeRemaining = Timewatch.GetRemainingTime(_timedOutUsers[message.Author]);
+            await message.Author.SendMessageAsync(string.Format("You're on a timeout for {0} more seconds.", timeRemaining));
         }
 
         private async Task HandleBlacklistedAuthor(SocketMessage message)
@@ -166,6 +184,36 @@ namespace AntiBotSharp
                 case CommandType.RemoveFilter:
 
                     _filteredWords.Remove(command.Arguments[0].Argument);
+
+                    break;
+
+                case CommandType.AddTimeout:
+
+                    double timeoutDurationInSeconds;
+                    if(double.TryParse(command.Arguments[1].Argument, out timeoutDurationInSeconds))
+                    {
+                        SocketUser mentionedUser = command.Arguments[0].MentionedUser;
+                        if (mentionedUser == null)
+                            return;
+
+                        Action removeTimedOutUser = ()=> _timedOutUsers.Remove(mentionedUser);
+                        string id = Timewatch.AddTimer(timeoutDurationInSeconds, removeTimedOutUser);
+
+                        _timedOutUsers.Add(mentionedUser, id);
+
+                        await Log(string.Format("Adding timeout of {0} seconds to {1}", timeoutDurationInSeconds, mentionedUser.Username));
+                    }
+
+                    break;
+
+                case CommandType.RemoveTimeout:
+
+                    if(command.Arguments[0].IsUserMention)
+                    {
+                        await Log("Removing timeout: " + command.Arguments[0].MentionedUser.Username);
+                        Timewatch.RemoveTimer(_timedOutUsers[command.Arguments[0].MentionedUser]);
+                        _timedOutUsers.Remove(command.Arguments[0].MentionedUser);
+                    }
 
                     break;
 

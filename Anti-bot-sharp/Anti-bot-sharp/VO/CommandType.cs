@@ -10,6 +10,8 @@
         RemoveBlacklist,
         AddFilter,
         RemoveFilter,
+        AddTimeout,
+        RemoveTimeout,
         ListBlacklist,
         ListFilter,
         ListAdmins,
