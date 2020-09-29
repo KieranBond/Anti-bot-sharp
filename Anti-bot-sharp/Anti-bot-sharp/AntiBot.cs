@@ -13,6 +13,9 @@ namespace AntiBotSharp
     {
         private const string _botPrefix = "?ybd";
 
+        private bool _auditLogMode = false;
+        private ISocketMessageChannel _auditLogChannel;
+
         private DiscordSocketClient _client;
 
         private Config _config;
@@ -28,12 +31,92 @@ namespace AntiBotSharp
         {
             Configure(config);
 
-            _client = new DiscordSocketClient();
+            _client = new DiscordSocketClient(/*new DiscordSocketConfig() { MessageCacheSize = 100 }*/);
             _client.Log += (msg) => Log(msg.ToString());
 
             _client.Connected += OnConnected;
             _client.Ready += OnReady;
             _client.MessageReceived += OnMessageReceived;
+
+            SetupAuditLog();
+        }
+
+        private void SetupAuditLog()
+        {
+            //
+            //  Message Sent
+            //
+            _client.MessageReceived += (message) =>
+            {
+                if(message.Attachments != null && message.Attachments.Count > 0)
+                {
+                    return AuditLog(string.Format("{0}: **{1}** sent a file with {2} attachments in channel '{3}'. Message content: '{4}'", DateTime.Now.ToString(), message.Author, message.Attachments.Count, message.Channel.Name, message.Content));
+                }
+
+                return Task.CompletedTask;
+            };
+
+
+            //
+            //  Message deleted
+            //
+            _client.MessageDeleted += async(cachableMessage, messageChannel) => 
+            {
+                var message = await cachableMessage.DownloadAsync();
+                if(message?.Content != null)
+                {
+                    await AuditLog(string.Format("{0}: Message deleted: '{1}' from channel: '{2}'. Message sent by: **{3}**", DateTime.Now.ToString(), message.Content, messageChannel.Name, message.Author));
+                }
+                else
+                    await AuditLog(string.Format("{0}: Message deleted from '{1}' channel. Too old for cache.", DateTime.Now.ToString(), messageChannel.Name)); 
+            };
+
+            //
+            //  Message Updated
+            //
+            _client.MessageUpdated += async (cachableMessage, updatedMessage, messageChannel) =>
+            {
+                var originalMessage = await cachableMessage.DownloadAsync();
+
+                if (originalMessage?.Content != null)
+                {
+                    await AuditLog(string.Format("{0}: **{1}** modified a message from '{2}' to '{3}' in channel '{4}'.", DateTime.Now.ToString(), updatedMessage.Author, originalMessage.Content, updatedMessage.Content, messageChannel.Name));
+                }
+                else
+                    await AuditLog(string.Format("{0}: **{1}** modified a message to '{2}' in channel '{3}'. Too old for cache to see original.", DateTime.Now.ToString(), updatedMessage.Author, updatedMessage.Content, messageChannel.Name));
+            };
+
+            //
+            //  Voice channel stuff
+            //
+            _client.UserVoiceStateUpdated += (user, previousVoiceState, currentVoiceState) =>
+            {
+                StringBuilder output = new StringBuilder();
+                output.Append(previousVoiceState.IsDeafened != currentVoiceState.IsDeafened ? "was un/deafened by somebody else" : "")
+                .Append(previousVoiceState.IsMuted != currentVoiceState.IsMuted ? "was un/muted by somebody else" : "")
+                .Append(previousVoiceState.IsStreaming != currentVoiceState.IsStreaming ? "started/ended streaming" : "");
+
+                if (previousVoiceState.VoiceChannel != currentVoiceState.VoiceChannel)
+                {
+                    if (currentVoiceState.VoiceChannel != null)
+                        output.Append("moved to channel " + currentVoiceState.VoiceChannel.Name);
+                    else
+                        output.Append("left voice channel " + previousVoiceState.VoiceChannel.Name);
+                }
+
+                if (string.IsNullOrEmpty(output.ToString()))
+                    return Task.CompletedTask;
+                else
+                    return AuditLog(string.Format("{0}: **{1}**, {2}", DateTime.Now.ToString(), user, output.ToString()));
+            };
+        }
+
+        private Task AuditLog(string activity)
+        {
+            if (_auditLogMode)
+                return _auditLogChannel.SendMessageAsync(activity);
+            else
+                return Task.CompletedTask;
         }
 
         private Task OnReady()
@@ -112,7 +195,7 @@ namespace AntiBotSharp
         private async Task HandleFilteredMessage(SocketMessage message)
         {
             int numberOfBadWords = GetFilteredWordsFromMessage(message.Content).Count;
-
+            
             await message.DeleteAsync();
 
             if(numberOfBadWords > 1)
@@ -259,6 +342,27 @@ namespace AntiBotSharp
                     }
 
                     await command.OriginalMessage.Channel.SendMessageAsync(filteredWordsOutput.ToString());
+
+                    break;
+
+                case CommandType.AuditLogTarget:
+
+                    foreach(CommandArgument argument in command.Arguments)
+                    {
+                        if(argument.IsChannelMention)
+                        {
+                            if(argument.MentionedChannel is ISocketMessageChannel)
+                                _auditLogChannel = argument.MentionedChannel as ISocketMessageChannel;
+
+                            break;
+                        }
+                    }
+
+                    break;
+
+                case CommandType.ToggleAuditLog:
+
+                    _auditLogMode = !_auditLogMode;
 
                     break;
 
