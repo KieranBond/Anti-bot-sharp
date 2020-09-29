@@ -15,6 +15,8 @@
         ListBlacklist,
         ListFilter,
         ListAdmins,
+        AuditLogTarget,
+        ToggleAuditLog,
         GetID,
         Cleanup
     }

@@ -7,10 +7,12 @@ namespace AntiBotSharp.VO
         public string Argument { get; private set; }
 
         public bool IsUserMention { get; private set; }
+        public bool IsChannelMention { get; private set; }
 
         public SocketUser MentionedUser { get; private set; }
+        public SocketChannel MentionedChannel { get; private set; }
 
-        public CommandArgument(string argument, SocketUser mentionedUser = null)
+        public CommandArgument(string argument, SocketUser mentionedUser = null, SocketChannel mentionedChannel = null)
         {
             Argument = argument;
 
@@ -18,6 +20,11 @@ namespace AntiBotSharp.VO
             {
                 IsUserMention = true;
                 MentionedUser = mentionedUser;
+            }
+            else if(mentionedChannel != null)
+            {
+                IsChannelMention = true;
+                MentionedChannel = mentionedChannel;
             }
         }
     }

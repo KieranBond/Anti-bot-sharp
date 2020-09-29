@@ -31,8 +31,9 @@ namespace AntiBotSharp.Helpers
                 {
                     string property = props[i];
                     var mentionedUser = GetMentionedUser(property, message.MentionedUsers);
+                    var mentionedChannel = GetMentionedChannel(property, message.MentionedChannels);
 
-                    CommandArgument argument = new CommandArgument(property, mentionedUser);
+                    CommandArgument argument = new CommandArgument(property, mentionedUser, mentionedChannel);
                     arguments.Add(argument);
                 }
             }
@@ -45,6 +46,26 @@ namespace AntiBotSharp.Helpers
                 parsedCommand = new Command(commandType, message);
 
             return parsedCommand;
+        }
+
+        private static SocketChannel GetMentionedChannel(string property, IEnumerable<SocketGuildChannel> mentionedChannels)
+        {
+            Console.WriteLine("Mentioned channel? " + property);
+
+            if(property.StartsWith("<#") && property.EndsWith(">"))
+            {
+                string strippedChannelID = property.Replace("<#", "").Replace(">", "");
+
+                foreach(SocketChannel mentionedChannel in mentionedChannels)
+                {
+                    if(mentionedChannel.Id.ToString() == strippedChannelID)
+                    {
+                        return mentionedChannel;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static SocketUser GetMentionedUser(string property, IEnumerable<SocketUser> mentionedUsers)
@@ -135,6 +156,18 @@ namespace AntiBotSharp.Helpers
                 case "cleanup":
 
                     return CommandType.Cleanup;
+
+                    break;
+
+                case "auditlogtarget":
+
+                    return CommandType.AuditLogTarget;
+
+                    break;
+
+                case "toggleauditlog":
+
+                    return CommandType.ToggleAuditLog;
 
                     break;
 
