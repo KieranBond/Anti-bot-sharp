@@ -32,6 +32,9 @@ namespace AntiBotSharp.Helpers
             {
                 double deltaTime = (DateTime.Now - _lastTimeTick).TotalSeconds;
 
+                if (_timers.Count <= 0)
+                    continue;
+
                 lock (_timerLock)
                 {
                     List<string> toRemove = new List<string>();
@@ -69,6 +72,10 @@ namespace AntiBotSharp.Helpers
         public static int GetRemainingTime(string timerID)
         {
             double duration = -1d;
+ 
+            if (Instance._timers.Count <= 0)
+                return (int)duration;
+
             lock(Instance._timerLock)
             {
                 if(Instance._timers.ContainsKey(timerID))
@@ -92,7 +99,7 @@ namespace AntiBotSharp.Helpers
 
         private void RemoveCallbackTimer(string id)
         {
-            if (_timers.ContainsKey(id))
+            if (_timers.Count > 0 && _timers.ContainsKey(id))
             {
                 lock (_timerLock)
                 {
