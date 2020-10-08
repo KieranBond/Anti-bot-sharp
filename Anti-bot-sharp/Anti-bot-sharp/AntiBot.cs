@@ -113,7 +113,7 @@ namespace AntiBotSharp
 
         private Task AuditLog(string activity)
         {
-            if (_auditLogMode)
+            if (_auditLogMode && _auditLogChannel != null)
                 return _auditLogChannel.SendMessageAsync(activity);
             else
                 return Task.CompletedTask;
@@ -491,6 +491,9 @@ namespace AntiBotSharp
                     .Append("\n")
                     .Append("`addtimeout @ x` gives user mentioned a temporary mute for x seconds.\n")
                     .Append("`removetimeout @` removes any timeout on mentioned user.\n")
+                    .Append("\n")
+                    .Append("`toggleauditlog` Toggles whether the bot will log into the Audit log channel.\n")
+                    .Append("`auditlogtarget #` Sets the Audit log target channel to mentioned.\n")
                     .Append("\n")
                     .Append("`cleanup` simply removes the last 100 messages using the prefix. Can take a while so be sparing with this. It will output when done.\n")
                     .Append("\n")
