@@ -4,6 +4,7 @@ using Discord;
 using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -26,6 +27,10 @@ namespace AntiBotSharp
         private HashSet<SocketUser> _blacklistedUsers = new HashSet<SocketUser>();
         private HashSet<string> _filteredWords = new HashSet<string>();
         private Dictionary<SocketUser, string> _timedOutUsers = new Dictionary<SocketUser, string>();
+        private SocketRole _timeOutRole;
+
+        private List<SocketMessage> _cachedMessages = new List<SocketMessage>();
+        private const int CachedMessageLimit = 200;
 
         public AntiBot(Config config)
         {
@@ -48,6 +53,11 @@ namespace AntiBotSharp
             //
             _client.MessageReceived += (message) =>
             {
+                _cachedMessages.Add(message);
+
+                if (_cachedMessages.Count > CachedMessageLimit)
+                    _cachedMessages.RemoveAt(_cachedMessages.Count - 1);
+
                 if(message.Attachments != null && message.Attachments.Count > 0)
                 {
                     return AuditLog(string.Format("{0}: **{1}** sent a file with {2} attachments in channel '{3}'. Message content: '{4}'", DateTime.Now.ToString(), message.Author, message.Attachments.Count, message.Channel.Name, message.Content));
@@ -62,10 +72,15 @@ namespace AntiBotSharp
             //
             _client.MessageDeleted += async(cachableMessage, messageChannel) => 
             {
-                var message = await cachableMessage.DownloadAsync();
-                if(message?.Content != null)
+                var deletedMessage = await cachableMessage.DownloadAsync();
+                if (deletedMessage == null || deletedMessage.Content == null)
                 {
-                    await AuditLog(string.Format("{0}: Message deleted: '{1}' from channel: '{2}'. Message sent by: **{3}**", DateTime.Now.ToString(), message.Content, messageChannel.Name, message.Author));
+                    deletedMessage = FetchMessageFromOurCache(cachableMessage.Id);
+                }
+
+                if (deletedMessage?.Content != null)
+                {
+                    await AuditLog(string.Format("{0}: Message deleted: '{1}' from channel: '{2}'. Message sent by: **{3}**", DateTime.Now.ToString(), deletedMessage.Content, messageChannel.Name, deletedMessage.Author));
                 }
                 else
                     await AuditLog(string.Format("{0}: Message deleted from '{1}' channel. Too old for cache.", DateTime.Now.ToString(), messageChannel.Name)); 
@@ -76,14 +91,21 @@ namespace AntiBotSharp
             //
             _client.MessageUpdated += async (cachableMessage, updatedMessage, messageChannel) =>
             {
-                var originalMessage = await cachableMessage.DownloadAsync();
+                IMessage originalMessage = cachableMessage.Value;
+
+                if(originalMessage == null || originalMessage.Content == null)
+                {
+                    originalMessage = FetchMessageFromOurCache(cachableMessage.Id);
+                }
 
                 if (originalMessage?.Content != null)
                 {
                     await AuditLog(string.Format("{0}: **{1}** modified a message from '{2}' to '{3}' in channel '{4}'.", DateTime.Now.ToString(), updatedMessage.Author, originalMessage.Content, updatedMessage.Content, messageChannel.Name));
                 }
                 else
+                {
                     await AuditLog(string.Format("{0}: **{1}** modified a message to '{2}' in channel '{3}'. Too old for cache to see original.", DateTime.Now.ToString(), updatedMessage.Author, updatedMessage.Content, messageChannel.Name));
+                }
             };
 
             //
@@ -111,10 +133,21 @@ namespace AntiBotSharp
             };
         }
 
+        private IMessage FetchMessageFromOurCache(ulong originalMessageID)
+        {
+            var cached = _cachedMessages.LastOrDefault(message => message.Id == originalMessageID);
+
+            if (cached != null)
+                return cached;
+
+            return null;
+        }
+
         private Task AuditLog(string activity)
         {
+            string lineBreak = "\n--------------------------";
             if (_auditLogMode && _auditLogChannel != null)
-                return _auditLogChannel.SendMessageAsync(activity);
+                return _auditLogChannel.SendMessageAsync(activity + lineBreak);
             else
                 return Task.CompletedTask;
         }
@@ -122,6 +155,7 @@ namespace AntiBotSharp
         private Task OnReady()
         {
             ConfigureAdmins();
+            ConfigureTimeOutRole();
             return Task.CompletedTask;
         }
 
@@ -144,6 +178,22 @@ namespace AntiBotSharp
                     {
                         await Log("Admin found: " + adminUser.Username);
                         _admins.Add(adminUser);
+                    }
+                }
+            }
+        }
+
+        private async void ConfigureTimeOutRole()
+        {
+            foreach(SocketGuild guild in _client.Guilds)
+            {
+                foreach(SocketRole role in guild.Roles)
+                {
+                    if (role.Name == _config.TimeOutRole)
+                    {
+                        _timeOutRole = role;
+                        await Log("Timeout role is " + _timeOutRole);
+                        return;
                     }
                 }
             }
@@ -279,10 +329,10 @@ namespace AntiBotSharp
                         if (mentionedUser == null)
                             return;
 
-                        Action removeTimedOutUser = ()=> _timedOutUsers.Remove(mentionedUser);
+                        Action removeTimedOutUser = async()=> await RemoveTimeout(mentionedUser);
                         string id = Timewatch.AddTimer(timeoutDurationInSeconds, removeTimedOutUser);
 
-                        _timedOutUsers.Add(mentionedUser, id);
+                        await AddTimeout(mentionedUser, id);
 
                         await Log(string.Format("Adding timeout of {0} seconds to {1}", timeoutDurationInSeconds, mentionedUser.Username));
                     }
@@ -296,6 +346,16 @@ namespace AntiBotSharp
                         await Log("Removing timeout: " + command.Arguments[0].MentionedUser.Username);
                         Timewatch.RemoveTimer(_timedOutUsers[command.Arguments[0].MentionedUser]);
                         _timedOutUsers.Remove(command.Arguments[0].MentionedUser);
+                    }
+
+                    break;
+
+                case CommandType.SetTimeoutRole:
+
+                    if(command.Arguments[0].IsRoleMention)
+                    {
+                        await Log("Setting timeout role: " + command.Arguments[0].MentionedRole.Name);
+                        _timeOutRole = command.Arguments[0].MentionedRole;
                     }
 
                     break;
@@ -414,6 +474,22 @@ namespace AntiBotSharp
             }
         }
 
+        private async Task AddTimeout(SocketUser mentionedUser, string id)
+        {
+            _timedOutUsers.Add(mentionedUser, id);
+
+            if (_timeOutRole != null)
+                await (mentionedUser as IGuildUser).AddRoleAsync(_timeOutRole);
+        }
+
+        private async Task RemoveTimeout(SocketUser mentionedUser)
+        {
+            _timedOutUsers.Remove(mentionedUser);
+
+            if(_timeOutRole != null)
+                await (mentionedUser as IGuildUser).RemoveRoleAsync(_timeOutRole);
+        }
+
         private bool IsMessageAuthorBlacklisted(SocketUser author)
         {
             return _blacklistedUsers.Contains(author);
@@ -491,6 +567,7 @@ namespace AntiBotSharp
                     .Append("\n")
                     .Append("`addtimeout @ x` gives user mentioned a temporary mute for x seconds.\n")
                     .Append("`removetimeout @` removes any timeout on mentioned user.\n")
+                    .Append("`settimeoutrole @` changes the role given to mentioned role when user is put on timeout.\n")
                     .Append("\n")
                     .Append("`toggleauditlog` Toggles whether the bot will log into the Audit log channel.\n")
                     .Append("`auditlogtarget #` Sets the Audit log target channel to mentioned.\n")

@@ -9,6 +9,7 @@ namespace AntiBotSharp.VO
     {
         public string Token { get; set; }
         public string[] Admins { get; set; }
+        public string TimeOutRole { get; set; }
 
         public static async Task<Config> BuildConfig()
         {

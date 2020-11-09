@@ -2,6 +2,7 @@
 using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace AntiBotSharp.Helpers
 {
@@ -32,8 +33,9 @@ namespace AntiBotSharp.Helpers
                     string property = props[i];
                     var mentionedUser = GetMentionedUser(property, message.MentionedUsers);
                     var mentionedChannel = GetMentionedChannel(property, message.MentionedChannels);
+                    var mentionedRole = GetMentionedRole(property, message.MentionedRoles);
 
-                    CommandArgument argument = new CommandArgument(property, mentionedUser, mentionedChannel);
+                    CommandArgument argument = new CommandArgument(property, mentionedUser, mentionedChannel, mentionedRole);
                     arguments.Add(argument);
                 }
             }
@@ -46,6 +48,29 @@ namespace AntiBotSharp.Helpers
                 parsedCommand = new Command(commandType, message);
 
             return parsedCommand;
+        }
+
+        private static SocketRole GetMentionedRole(string property, IReadOnlyCollection<SocketRole> mentionedRoles)
+        {
+            Console.WriteLine("Mentioned role? " + property);
+
+            if(mentionedRoles.Count > 0)
+            {
+                if (mentionedRoles.Count == 1)
+                {
+                    return mentionedRoles.ToList()[0];
+                }
+
+                foreach(SocketRole mentionedRole in mentionedRoles)
+                {
+                    if(property.Contains(mentionedRole.Id.ToString()))
+                    {
+                        return mentionedRole;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static SocketChannel GetMentionedChannel(string property, IEnumerable<SocketGuildChannel> mentionedChannels)
@@ -132,6 +157,12 @@ namespace AntiBotSharp.Helpers
                 case "removetimeout":
 
                     return CommandType.RemoveTimeout;
+
+                    break;
+
+                case "settimeoutrole":
+
+                    return CommandType.SetTimeoutRole;
 
                     break;
 

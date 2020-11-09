@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AntiBotSharp.Helpers
@@ -9,6 +11,7 @@ namespace AntiBotSharp.Helpers
         public static Timewatch Instance { get { return _instance.Value; } }
         private static readonly Lazy<Timewatch> _instance = new Lazy<Timewatch>(true);
 
+        private Stopwatch _stopWatch;
         private DateTime _lastTimeTick;
 
         private Dictionary<string, Timer> _timers;
@@ -23,17 +26,23 @@ namespace AntiBotSharp.Helpers
         {
             _timers = new Dictionary<string, Timer>();
             _lastTimeTick = DateTime.Now;
+            _stopWatch = new Stopwatch();
             Task.Run(BeginTicking);
         }
 
         private void BeginTicking()
         {
+            _stopWatch.Start();
             do
             {
-                double deltaTime = (DateTime.Now - _lastTimeTick).TotalSeconds;
+                double deltaTime = _stopWatch.ElapsedMilliseconds * 0.001d;//Convert to seconds
+                _stopWatch.Restart();
 
                 if (_timers.Count <= 0)
+                {
+                    _lastTimeTick = DateTime.Now;
                     continue;
+                }
 
                 lock (_timerLock)
                 {
@@ -54,6 +63,8 @@ namespace AntiBotSharp.Helpers
                 }
 
                 _lastTimeTick = DateTime.Now;
+
+                Thread.Sleep(100);
             }
             while (true);
 

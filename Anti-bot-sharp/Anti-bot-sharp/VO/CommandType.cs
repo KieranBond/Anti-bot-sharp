@@ -12,6 +12,7 @@
         RemoveFilter,
         AddTimeout,
         RemoveTimeout,
+        SetTimeoutRole,
         ListBlacklist,
         ListFilter,
         ListAdmins,
